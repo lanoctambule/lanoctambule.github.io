@@ -1,0 +1,34 @@
+{
+  "title": "Notes de chevet",
+  "tagline": "Sur mon chevet, rien ne dort.",
+  "subtagline": "Ça bouscule, ça hurle, ça chamboule.",
+  "description": "Blog sur les livres, les films, les séries et la musique : ça bouscule, ça hurle, ça chamboule.",
+  "pseudo": "La Noctambule",
+  "language": "fr",
+  "site_url": "",
+  "instagram": "",
+  "editeur_nom": "La Noctambule",
+  "editeur_statut": "Particulier, site personnel non commercial, sans publicité ni affiliation. Conformément à l'article 6, III, 2 de la loi du 21 juin 2004 pour la confiance dans l'économie numérique, l'éditeur a choisi de rester anonyme et a communiqué ses éléments d'identification personnelle à l'hébergeur.",
+  "editeur_email": "lesnotesdelanoctambule@gmail.com",
+  "directeur_publication": "La Noctambule",
+  "hebergeur_nom": "GitHub, Inc. (GitHub Pages)",
+  "hebergeur_adresse": "88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis",
+  "hebergeur_site": "https://pages.github.com",
+  "categories": [
+    {
+      "name": "Lecture",
+      "slug": "lecture",
+      "description": "Chroniques, coups de cœur et rituels de lecture."
+    },
+    {
+      "name": "Films & séries",
+      "slug": "films-series",
+      "description": "Ce qui s'est joué sur l'écran, du cinéma aux séries du soir."
+    },
+    {
+      "name": "Musique",
+      "slug": "musique",
+      "description": "Albums, playlists et bandes-son qui accompagnent les journées."
+    }
+  ]
+}
