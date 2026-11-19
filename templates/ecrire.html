@@ -1,0 +1,256 @@
+<section class="hero small">
+  <h1>Écrire</h1>
+  <p class="tagline">Espace réservé à l'éditrice du blog.</p>
+</section>
+
+<section class="admin">
+
+  <div id="setup" hidden>
+    <h2 class="section-title">Première connexion</h2>
+    <p>Pour publier, cette page a besoin d'une <strong>clé d'accès GitHub</strong> (à créer une seule fois, voir le guide ci-dessous). Elle reste uniquement sur cet appareil.</p>
+    <label for="token">Clé d'accès</label>
+    <input type="password" id="token" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+    <label class="check"><input type="checkbox" id="remember" checked> Me souvenir sur cet appareil</label>
+    <p><button type="button" id="saveToken">Vérifier et enregistrer</button></p>
+    <p id="setupStatus" class="status" role="status" aria-live="polite"></p>
+
+    <details>
+      <summary>Comment créer la clé d'accès (2 minutes, une seule fois)</summary>
+      <ol>
+        <li>Sur github.com, connecte-toi, clique sur ta photo en haut à droite, puis <strong>Settings</strong>.</li>
+        <li>Tout en bas du menu de gauche : <strong>Developer settings</strong> → <strong>Personal access tokens</strong> → <strong>Fine-grained tokens</strong> → <strong>Generate new token</strong>.</li>
+        <li>Donne-lui un nom (ex. « Écrire sur le blog ») et choisis une durée (1 an au maximum).</li>
+        <li>Dans <strong>Repository access</strong>, choisis <strong>Only select repositories</strong> et sélectionne uniquement le dépôt du blog.</li>
+        <li>Dans <strong>Permissions → Repository permissions</strong>, mets <strong>Contents</strong> sur <strong>Read and write</strong>. Ne touche à rien d'autre.</li>
+        <li>Clique sur <strong>Generate token</strong>, copie la clé (elle commence par <code>github_pat_</code>) et colle-la dans le champ ci-dessus. GitHub ne la montre qu'une fois.</li>
+      </ol>
+      <p class="small">Cette clé ne donne accès qu'à ce blog. Si tu perds ton téléphone, supprime-la depuis la même page de GitHub.</p>
+    </details>
+  </div>
+
+  <form id="writer" hidden>
+    <fieldset class="formats">
+      <legend>Que veux-tu publier ?</legend>
+      <label><input type="radio" name="format" value="note" checked> Note rapide <span class="hint">texte court, photo possible</span></label>
+      <label><input type="radio" name="format" value="chronique"> Chronique <span class="hint">avec un titre</span></label>
+    </fieldset>
+
+    <label for="category">Catégorie</label>
+    <select id="category"></select>
+
+    <div id="chroniqueFields" hidden>
+      <label for="title">Titre de la chronique</label>
+      <input type="text" id="title" maxlength="140" autocomplete="off">
+      <label for="summary">Résumé <span class="hint">une ou deux phrases, affichées sur l'accueil</span></label>
+      <input type="text" id="summary" maxlength="300" autocomplete="off">
+    </div>
+
+    <label for="text">Texte</label>
+    <textarea id="text" rows="9" placeholder="Écris ici…"></textarea>
+    <p class="small">Pour une chronique : <code>## Titre</code> pour un intertitre, <code>*italique*</code>, <code>**gras**</code>.</p>
+
+    <label for="photo">Photo <span class="hint">facultative</span></label>
+    <input type="file" id="photo" accept="image/*">
+    <div id="preview" hidden>
+      <img id="previewImg" alt="Aperçu de la photo choisie">
+      <label for="alt">Description de la photo <span class="hint">pour les personnes qui ne la voient pas</span></label>
+      <input type="text" id="alt" maxlength="200" autocomplete="off">
+      <p class="small">La photo est réduite et nettoyée de ses données cachées (lieu, appareil) avant l'envoi.</p>
+    </div>
+
+    <p><button type="submit" id="publish">Publier</button></p>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p class="small"><button type="button" id="forget" class="link">Oublier la clé sur cet appareil</button></p>
+  </form>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var CFG = __CONFIG__;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- Stockage de la clé (uniquement sur cet appareil) ----
+  function getToken() {
+    try { return localStorage.getItem("nc_token") || sessionStorage.getItem("nc_token") || ""; }
+    catch (e) { return ""; }
+  }
+  function setToken(value, remember) {
+    try {
+      localStorage.removeItem("nc_token"); sessionStorage.removeItem("nc_token");
+      (remember ? localStorage : sessionStorage).setItem("nc_token", value);
+    } catch (e) {}
+  }
+  function clearToken() {
+    try { localStorage.removeItem("nc_token"); sessionStorage.removeItem("nc_token"); } catch (e) {}
+  }
+
+  function show() {
+    var ok = !!getToken();
+    $("setup").hidden = ok;
+    $("writer").hidden = !ok;
+  }
+
+  // ---- Outils ----
+  function slugify(s) {
+    return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "chronique";
+  }
+  function oneLine(s) { return s.replace(/\s+/g, " ").replace(/---/g, "—").trim(); }
+  function bytesToB64(bytes) {
+    var bin = "";
+    for (var i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+  function textToB64(s) { return bytesToB64(new TextEncoder().encode(s)); }
+
+  function parisNow() {
+    var parts = new Intl.DateTimeFormat("fr-CA", {
+      timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
+    }).formatToParts(new Date());
+    var o = {};
+    parts.forEach(function (p) { o[p.type] = p.value; });
+    return { date: o.year + "-" + o.month + "-" + o.day, time: o.hour + o.minute + o.second };
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign({
+      "Authorization": "Bearer " + getToken(),
+      "Accept": "application/vnd.github+json"
+    }, options.headers || {});
+    return fetch("https://api.github.com" + path, options).then(function (r) {
+      if (r.ok) return r.json();
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        var e = new Error(j.message || r.statusText); e.status = r.status; throw e;
+      });
+    });
+  }
+
+  function putFile(path, contentB64, message) {
+    var url = "/repos/" + CFG.repo + "/contents/" + path.split("/").map(encodeURIComponent).join("/");
+    return api(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: message, content: contentB64, branch: CFG.branch })
+    });
+  }
+
+  function friendly(e) {
+    if (e.status === 401) return "La clé d'accès n'est pas valide ou a expiré. Oublie-la puis colles-en une nouvelle.";
+    if (e.status === 403 || e.status === 404) return "La clé n'a pas le droit d'écrire sur ce blog. Vérifie qu'elle est limitée au bon dépôt, avec « Contents : Read and write ».";
+    return "Échec : " + (e.message || "erreur inconnue") + ".";
+  }
+
+  // ---- Photo : réduction + suppression des métadonnées ----
+  function prepareImage(file) {
+    return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bmp) {
+      var max = 1600, scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      var w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+      var c = document.createElement("canvas"); c.width = w; c.height = h;
+      var ctx = c.getContext("2d");
+      ctx.fillStyle = "#171210"; ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(bmp, 0, 0, w, h);
+      return new Promise(function (res, rej) {
+        c.toBlob(function (b) { b ? res(b) : rej(new Error("photo illisible")); }, "image/jpeg", 0.82);
+      });
+    }).then(function (blob) { return blob.arrayBuffer(); })
+      .then(function (buf) { return new Uint8Array(buf); });
+  }
+
+  // ---- Interface ----
+  CFG.categories.forEach(function (name) {
+    var o = document.createElement("option"); o.value = o.textContent = name;
+    $("category").appendChild(o);
+  });
+
+  function syncFormat() {
+    var chronique = document.querySelector('input[name="format"]:checked').value === "chronique";
+    $("chroniqueFields").hidden = !chronique;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="format"]'),
+    function (r) { r.addEventListener("change", syncFormat); });
+
+  var previewUrl = "";
+  $("photo").addEventListener("change", function () {
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
+    var f = $("photo").files[0];
+    $("preview").hidden = !f;
+    if (f) { previewUrl = URL.createObjectURL(f); $("previewImg").src = previewUrl; }
+  });
+
+  $("saveToken").addEventListener("click", function () {
+    var t = $("token").value.trim();
+    var s = $("setupStatus");
+    if (!t) { s.textContent = "Colle d'abord ta clé d'accès."; return; }
+    if (!CFG.repo) { s.textContent = "Le réglage « github_repo » manque dans config.json."; return; }
+    s.textContent = "Vérification…";
+    setToken(t, $("remember").checked);
+    api("/repos/" + CFG.repo).then(function (r) {
+      if (r.permissions && !r.permissions.push) throw Object.assign(new Error("lecture seule"), { status: 403 });
+      $("token").value = ""; s.textContent = ""; show();
+    }).catch(function (e) { clearToken(); s.textContent = friendly(e); });
+  });
+
+  $("forget").addEventListener("click", function () {
+    clearToken(); $("status").textContent = ""; show();
+  });
+
+  $("writer").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var status = $("status"), btn = $("publish");
+    var format = document.querySelector('input[name="format"]:checked').value;
+    var isNote = format === "note";
+    var text = $("text").value.trim();
+    var title = oneLine($("title").value);
+    var file = $("photo").files[0];
+
+    if (isNote && !text && !file) { status.textContent = "Écris un texte ou choisis une photo."; return; }
+    if (!isNote && (!title || !text)) { status.textContent = "Une chronique a besoin d'un titre et d'un texte."; return; }
+
+    var now = parisNow();
+    var stamp = now.date.replace(/-/g, "") + "-" + now.time;
+    var postName = now.date + "-" + (isNote ? now.time + "-note" : slugify(title) + "-" + now.time.slice(0, 4)) + ".md";
+    var imgPath = "static/images/" + stamp + ".jpg";
+
+    btn.disabled = true; status.textContent = "Envoi en cours…";
+
+    var step = Promise.resolve();
+    if (file) {
+      step = prepareImage(file).then(function (bytes) {
+        status.textContent = "Envoi de la photo…";
+        return putFile(imgPath, bytesToB64(bytes), "Ajout d'une photo");
+      });
+    }
+    step.then(function () {
+      var fm = ["---", "type: " + format];
+      if (!isNote) fm.push("title: " + title);
+      fm.push("date: " + now.date, "category: " + $("category").value);
+      if (!isNote && $("summary").value.trim()) fm.push("summary: " + oneLine($("summary").value));
+      if (file) {
+        fm.push("image: /images/" + stamp + ".jpg");
+        fm.push("image_alt: " + oneLine($("alt").value));
+      }
+      fm.push("---", "", text, "");
+      status.textContent = "Publication…";
+      return putFile("posts/" + postName, textToB64(fm.join("\n")),
+        isNote ? "Nouvelle note" : "Nouvelle chronique : " + title);
+    }).then(function () {
+      status.innerHTML = "";
+      status.appendChild(document.createTextNode("Publié ! Le blog se met à jour dans 1 à 2 minutes. "));
+      var a = document.createElement("a"); a.href = CFG.site; a.textContent = "Voir le blog";
+      status.appendChild(a);
+      $("text").value = ""; $("title").value = ""; $("summary").value = "";
+      $("photo").value = ""; $("alt").value = ""; $("preview").hidden = true;
+    }).catch(function (e) {
+      status.textContent = friendly(e);
+    }).then(function () { btn.disabled = false; });
+  });
+
+  syncFormat();
+  show();
+})();
+</script>

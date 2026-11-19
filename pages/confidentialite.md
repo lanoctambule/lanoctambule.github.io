@@ -7,7 +7,7 @@ summary: Quelles données sont (ou ne sont pas) collectées lorsque vous visitez
 
 ## En bref
 
-Ce site **ne dépose aucun cookie**, **n'utilise aucun outil de mesure d'audience**, ne contient **aucun formulaire**, ne charge **aucune police, vidéo, carte ou script provenant d'un service tiers** et ne propose pas de commentaires. Il n'a donc pas besoin de bandeau de consentement.
+Ce site **ne dépose aucun cookie**, **n'utilise aucun outil de mesure d'audience**, ne contient **aucun formulaire destiné aux visiteurs** (la page « Écrire » est réservée à l'éditrice et ne collecte aucune donnée), ne charge **aucune police, vidéo, carte ou script provenant d'un service tiers** et ne propose pas de commentaires. Il n'a donc pas besoin de bandeau de consentement.
 
 ## Responsable du traitement
 

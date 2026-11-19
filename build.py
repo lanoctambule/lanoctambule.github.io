@@ -109,9 +109,9 @@ def mark_affiliate_links(out):
     return re.sub(r'<a href="(https?://[^"]+)"([^>]*)>', repl, out)
 
 
-def render_markdown(text, base):
+def render_markdown(text, base, line_breaks=False):
     md = markdown.Markdown(
-        extensions=["extra", "smarty", "sane_lists"],
+        extensions=["extra", "smarty", "sane_lists"] + (["nl2br"] if line_breaks else []),
         extension_configs={"smarty": {"smart_quotes": False}},
     )
     out = md.convert(text)
@@ -153,7 +153,9 @@ def load_posts(cfg):
         meta, body = parse_front_matter(f.read_text(encoding="utf-8"), f.name)
         if meta.get("brouillon", meta.get("draft", "")).lower() in ("oui", "true", "1"):
             continue
-        for required in ("title", "date", "category"):
+        kind = meta.get("type", meta.get("format", "chronique")).lower()
+        is_note = kind in ("note", "fil", "court")
+        for required in (("date", "category") if is_note else ("title", "date", "category")):
             if required not in meta:
                 fail(f"Il manque « {required}: » dans l'en-tête de {f.name}.")
         try:
@@ -164,14 +166,26 @@ def load_posts(cfg):
             valid = ", ".join(categories)
             fail(f"La catégorie « {meta['category']} » de {f.name} n'existe pas. "
                  f"Catégories possibles : {valid}.")
-        stem = re.sub(r"^\d{4}-\d{2}-\d{2}-?", "", f.stem)
-        slug = slugify(meta.get("slug", stem or meta["title"]))
+        title = meta.get("title", "")
+        if title:
+            stem = re.sub(r"^\d{4}-\d{2}-\d{2}-?", "", f.stem)
+            slug = slugify(meta.get("slug", stem or title))
+        else:
+            # Une note sans titre garde la date dans son adresse, pour rester unique.
+            slug = slugify(meta.get("slug", f.stem))
         words = len(re.findall(r"\w+", body))
+        plain = re.sub(r"[#*_>`\[\]!]|\(([^)]*)\)", "", body)
+        plain = re.sub(r"\s+", " ", plain).strip()
+        short = plain if len(plain) <= 70 else plain[:70].rsplit(" ", 1)[0] + "…"
         posts.append({
-            "title": meta["title"],
+            "title": title,
+            "display_title": title or short or f"Note du {fr_date(d)}",
+            "is_note": is_note,
             "date": d,
             "category": categories[meta["category"]],
             "summary": meta.get("summary", ""),
+            "image": meta.get("image", ""),
+            "image_alt": meta.get("image_alt", ""),
             "slug": slug,
             "body_md": body,
             "minutes": max(1, math.ceil(words / 220)),
@@ -215,8 +229,9 @@ def make_site(cfg, posts, pages):
     def absolute(path):
         return cfg["site_url"] + path if cfg["site_url"] else None
 
-    def layout(title, description, body, path, *, home=False, active="", kind="website"):
+    def layout(title, description, body, path, *, home=False, active="", kind="website", noindex=False):
         full_title = site_title if home else f"{title} · {site_title}"
+        robots_tag = '<meta name="robots" content="noindex, nofollow">' if noindex else ""
         canonical = absolute(path)
         nav_items = [("/", "Accueil", "home")]
         for c in cfg["categories"]:
@@ -257,6 +272,7 @@ def make_site(cfg, posts, pages):
 <meta name="description" content="{esc(description or cfg['description'])}">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#171210">
+{robots_tag}
 <meta property="og:type" content="{kind}">
 <meta property="og:title" content="{esc(full_title)}">
 <meta property="og:description" content="{esc(description or cfg['description'])}">
@@ -287,21 +303,45 @@ def make_site(cfg, posts, pages):
 </html>
 """
 
+    def figure(p):
+        if not p["image"]:
+            return ""
+        src = u(p["image"]) if p["image"].startswith("/") else p["image"]
+        return (f'<figure class="photo"><img src="{esc(src)}" alt="{esc(p["image_alt"])}" '
+                f'loading="lazy"></figure>')
+
     def post_card(p):
         c = p["category"]
+        link = u("/articles/" + p["slug"] + "/")
+        chip = f'<a class="chip" href="{u("/categorie/" + c["slug"] + "/")}">{esc(c["name"])}</a>'
+        when = (f'<a class="when" href="{link}"><time datetime="{p["date"].isoformat()}">'
+                f'{fr_date(p["date"])}</time></a>')
+        if p["is_note"]:
+            text = render_markdown(p["body_md"], base, line_breaks=True)
+            body = f'<div class="note-text">{text}</div>' if p["body_md"] else ""
+            return f"""<article class="card note">
+  {figure(p)}
+  <div class="card-body">
+    <p class="meta">{chip} {when}</p>
+    {body}
+  </div>
+</article>"""
         summary = f'<p class="summary">{esc(p["summary"])}</p>' if p["summary"] else ""
-        return f"""<article class="card">
-  <p class="meta"><a class="chip" href="{u('/categorie/' + c['slug'] + '/')}">{esc(c['name'])}</a>
-  <time datetime="{p['date'].isoformat()}">{fr_date(p['date'])}</time></p>
-  <h3><a href="{u('/articles/' + p['slug'] + '/')}">{esc(p['title'])}</a></h3>
-  {summary}
+        return f"""<article class="card chronique">
+  {figure(p)}
+  <div class="card-body">
+    <p class="meta">{chip} {when} <span>{p['minutes']} min de lecture</span></p>
+    <h3><a href="{link}">{esc(p['title'])}</a></h3>
+    {summary}
+    <p class="more"><a href="{link}">Lire la chronique →</a></p>
+  </div>
 </article>"""
 
     outputs = {}
 
     # Accueil
     cards = "\n".join(post_card(p) for p in posts) or \
-        '<p class="empty">Aucun article pour le moment. Les premiers arrivent bientôt.</p>'
+        '<p class="empty">Rien pour le moment. Les premières publications arrivent bientôt.</p>'
     subtagline = (f'<p class="subtagline">{esc(cfg["subtagline"])}</p>'
                   if cfg.get("subtagline") else "")
     home_body = f"""<section class="hero">
@@ -310,7 +350,7 @@ def make_site(cfg, posts, pages):
   {subtagline}
 </section>
 <section class="list">
-  <h2 class="section-title">Derniers articles</h2>
+  <h2 class="section-title">Le fil</h2>
   {cards}
 </section>"""
     outputs["/"] = layout(site_title, cfg["description"], home_body, "/", home=True, active="home")
@@ -318,7 +358,7 @@ def make_site(cfg, posts, pages):
     # Articles
     for i, p in enumerate(posts):
         c = p["category"]
-        rendered = render_markdown(p["body_md"], base)
+        rendered = render_markdown(p["body_md"], base, line_breaks=p["is_note"])
         aff_note = ""
         if 'class="affilie"' in rendered:
             note = cfg.get("affiliation_article_note",
@@ -328,24 +368,28 @@ def make_site(cfg, posts, pages):
         older = posts[i + 1] if i + 1 < len(posts) else None
         pager = ""
         if newer or older:
-            left = (f'<a href="{u("/articles/" + older["slug"] + "/")}">← {esc(older["title"])}</a>'
+            left = (f'<a href="{u("/articles/" + older["slug"] + "/")}">← {esc(older["display_title"])}</a>'
                     if older else "<span></span>")
-            right = (f'<a href="{u("/articles/" + newer["slug"] + "/")}">{esc(newer["title"])} →</a>'
+            right = (f'<a href="{u("/articles/" + newer["slug"] + "/")}">{esc(newer["display_title"])} →</a>'
                      if newer else "<span></span>")
-            pager = f'<nav class="pager" aria-label="Autres articles">{left}{right}</nav>'
-        body = f"""<article class="post">
+            pager = f'<nav class="pager" aria-label="Autres publications">{left}{right}</nav>'
+        reading = "" if p["is_note"] else f" <span>{p['minutes']} min de lecture</span>"
+        heading = (f'<h1 class="sr-only">{esc(p["display_title"])}</h1>' if p["is_note"]
+                   else f'<h1>{esc(p["title"])}</h1>')
+        body = f"""<article class="post{' post-note' if p['is_note'] else ''}">
   <header class="post-head">
     <p class="meta"><a class="chip" href="{u('/categorie/' + c['slug'] + '/')}">{esc(c['name'])}</a>
-    <time datetime="{p['date'].isoformat()}">{fr_date(p['date'])}</time> <span>{p['minutes']} min de lecture</span></p>
-    <h1>{esc(p['title'])}</h1>
+    <time datetime="{p['date'].isoformat()}">{fr_date(p['date'])}</time>{reading}</p>
+    {heading}
   </header>
+  {figure(p)}
   {aff_note}<div class="prose">
 {rendered}
   </div>
 </article>
 {pager}"""
         path = f"/articles/{p['slug']}/"
-        outputs[path] = layout(p["title"], p["summary"], body, path, active=c["slug"], kind="article")
+        outputs[path] = layout(p["display_title"], p["summary"], body, path, active=c["slug"], kind="article")
 
     # Catégories
     for c in cfg["categories"]:
@@ -376,6 +420,19 @@ def make_site(cfg, posts, pages):
     return outputs, u, absolute, layout
 
 
+def admin_page(cfg, layout):
+    """Page « Écrire » (réservée à l'éditrice) : formulaire de publication."""
+    tpl = (ROOT / "templates" / "ecrire.html").read_text(encoding="utf-8")
+    conf = json.dumps({
+        "repo": cfg.get("github_repo", ""),
+        "branch": cfg.get("github_branch", "main"),
+        "categories": [c["name"] for c in cfg["categories"]],
+        "site": cfg["base"] + "/",
+    }, ensure_ascii=False).replace("</", "<\\/")
+    body = tpl.replace("__CONFIG__", conf)
+    return layout("Écrire", "", body, "/ecrire/", noindex=True)
+
+
 def write_file(relative, content):
     target = OUT / relative.lstrip("/")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -400,6 +457,9 @@ def main():
     for path, content in outputs.items():
         write_file(path + "index.html", content)
 
+    # Page « Écrire » (non référencée : absente du menu, du plan du site et des moteurs de recherche)
+    write_file("/ecrire/index.html", admin_page(cfg, layout))
+
     # Page 404
     body_404 = f"""<section class="hero small">
   <h1>Page introuvable</h1>
@@ -418,7 +478,7 @@ def main():
             pub = format_datetime(datetime(p["date"].year, p["date"].month, p["date"].day,
                                            8, 0, tzinfo=timezone.utc))
             items.append(f"""<item>
-<title>{esc(p['title'])}</title>
+<title>{esc(p['display_title'])}</title>
 <link>{esc(link)}</link>
 <guid>{esc(link)}</guid>
 <pubDate>{pub}</pubDate>
