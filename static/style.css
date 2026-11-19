@@ -144,7 +144,7 @@ a.affilie::after { content: " (lien affilié)"; font-size: .72em; font-style: it
 @media print {
   body { background: #fff; color: #000; }
   a { color: #000; }
-  .site-header nav, .site-footer, .pager { display: none; }
+  .site-header nav, .site-footer, .pager, .actions { display: none; }
 }
 
 /* Page « Écrire » */
@@ -184,3 +184,13 @@ a.affilie::after { content: " (lien affilié)"; font-size: .72em; font-style: it
 .admin button.danger:hover { background: var(--wine); color: #fff; }
 .admin button.secondary { background: transparent; border: 1px solid var(--line); color: var(--muted); }
 .admin button.secondary:hover { background: var(--bg-soft); color: var(--ink); }
+
+/* Partager / réagir */
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.4rem; margin-top: 1rem; padding-top: .7rem; border-top: 1px solid var(--line); font-size: .92rem; }
+.actions button.share { background: none; border: 0; padding: .15rem 0; font: inherit; color: var(--gold-soft); cursor: pointer; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .2em; }
+.actions button.share:hover { color: #f3dca0; }
+.actions button.share:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 2px; }
+.actions .react { color: var(--muted); text-decoration: none; letter-spacing: .03em; }
+.actions .react:hover { color: var(--gold-soft); }
+.share-status { color: var(--gold); font-style: italic; font-size: .85rem; }
+.post > .actions { margin-top: 2rem; justify-content: center; }

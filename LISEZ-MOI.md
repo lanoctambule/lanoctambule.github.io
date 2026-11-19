@@ -65,6 +65,7 @@ Le blog est conforme tel quel parce qu'il n'utilise **aucun service tiers**. Pou
 - **N'ajoute pas** Google Analytics, Google Fonts, boutons de partage ou commentaires. Si tu veux des statistiques, choisis un outil respectueux comme Plausible ou Umami, et dis-le-moi pour que je mette à jour la politique de confidentialité.
 - **Complète** les mentions légales (étape 2).
 - Pas de formulaire de contact : une adresse e-mail suffit.
+- **Partager et réagir** : chaque publication a un bouton « Partager » (menu de partage du téléphone, ou copie du lien) qui n'utilise aucun service tiers, et un lien « Réagir sur Instagram » vers ton compte (`instagram` dans `config.json`). Les J'aime et les commentaires se font donc sur Instagram, pas sur le blog. N'ajoute pas de boutons de partage fournis par des réseaux sociaux : ils déposent des cookies.
 
 ## Besoin d'aide ?
 

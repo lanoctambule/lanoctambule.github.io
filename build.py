@@ -282,6 +282,7 @@ def make_site(cfg, posts, pages):
 {rss_tag}
 <link rel="icon" href="{u('/favicon.svg')}" type="image/svg+xml">
 <link rel="stylesheet" href="{u('/style.css')}">
+<script src="{u('/partage.js')}" defer></script>
 </head>
 <body>
 <a class="skip" href="#contenu">Aller au contenu</a>
@@ -310,6 +311,18 @@ def make_site(cfg, posts, pages):
         return (f'<figure class="photo"><img src="{esc(src)}" alt="{esc(p["image_alt"])}" '
                 f'loading="lazy"></figure>')
 
+    def actions(p):
+        link = u("/articles/" + p["slug"] + "/")
+        share_title = f'{p["display_title"]} · {site_title}'
+        react = ""
+        if cfg.get("instagram"):
+            handle = cfg["instagram"].lstrip("@")
+            react = (f'<a class="react" href="https://www.instagram.com/{esc(handle)}/" '
+                     f'rel="noopener noreferrer">Réagir sur Instagram</a>')
+        return (f'<div class="actions"><button type="button" class="share" hidden '
+                f'data-url="{esc(link)}" data-title="{esc(share_title)}">Partager</button>'
+                f'{react}<span class="share-status" role="status" aria-live="polite"></span></div>')
+
     def post_card(p):
         c = p["category"]
         link = u("/articles/" + p["slug"] + "/")
@@ -324,6 +337,7 @@ def make_site(cfg, posts, pages):
   <div class="card-body">
     <p class="meta">{chip} {when}</p>
     {body}
+    {actions(p)}
   </div>
 </article>"""
         summary = f'<p class="summary">{esc(p["summary"])}</p>' if p["summary"] else ""
@@ -334,6 +348,7 @@ def make_site(cfg, posts, pages):
     <h3><a href="{link}">{esc(p['title'])}</a></h3>
     {summary}
     <p class="more"><a href="{link}">Lire la chronique →</a></p>
+    {actions(p)}
   </div>
 </article>"""
 
@@ -386,6 +401,7 @@ def make_site(cfg, posts, pages):
   {aff_note}<div class="prose">
 {rendered}
   </div>
+  {actions(p)}
 </article>
 {pager}"""
         path = f"/articles/{p['slug']}/"
