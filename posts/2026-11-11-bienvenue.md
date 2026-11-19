@@ -1,9 +1,9 @@
 ---
 type: chronique
-title: Bienvenue dans ce carnet
+title: Bienvenue sur mon chevet
 date: 2026-11-11
 category: Lecture
-summary: Un article d'exemple pour tester le blog : à remplacer par ton premier vrai texte.
+summary: Ici, on parle des livres qui bousculent, qui font rire, hurler ou chavirer, et de ce qu’ils laissent une fois refermés.
 ---
 
 Bienvenue sur mon chevet, là où rien ne dort.
