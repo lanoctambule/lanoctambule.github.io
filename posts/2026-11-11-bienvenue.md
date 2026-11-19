@@ -1,24 +1,25 @@
 ---
+type: chronique
 title: Bienvenue dans ce carnet
 date: 2026-11-11
 category: Lecture
 summary: Un article d'exemple pour tester le blog : à remplacer par ton premier vrai texte.
 ---
 
-Voici le premier article de ce carnet. C'est un texte d'exemple : il sert à vérifier que tout s'affiche correctement, et tu pourras le supprimer ou le réécrire à ta guise.
+Bienvenue sur mon chevet, là où rien ne dort.
 
-## Écrire un article
+Ici, on parle de livres. Pas de ceux qu'on lit poliment, mais de ceux qui bousculent, qui font rire à voix haute, serrer les dents ou refermer la page pour reprendre son souffle. Des histoires d'amour qui font battre le cœur, des récits sombres qui ne laissent pas indemne, des plumes qui piquent avec humour : j'aime les émotions fortes, et je ne m'en cache pas.
 
-Chaque article est un simple fichier texte placé dans le dossier `posts/`. Il commence par quelques lignes d'information (titre, date, catégorie, résumé), puis vient le texte.
+## Ce que tu trouveras ici
 
-Tu peux mettre du texte en *italique*, en **gras**, ajouter des listes :
+- des chroniques, avec mon avis franc sur ce qui m'a touchée, agacée ou emportée ;
+- des notes rapides, des phrases soulignées, des coups de cœur du soir ;
+- des lectures de toutes sortes, sans étiquette ni snobisme.
 
-- un livre commencé le soir, sous la couverture ;
-- un film qu'on n'attendait pas ;
-- un album écouté en boucle.
+## Comment ça marche
 
-> Une citation courte s'écrit avec le signe « > » devant la ligne.
+Je lis ce qui me tente et je te dis ce que j'en ai pensé, sans ménager mes mots mais toujours avec respect pour celles et ceux qui écrivent. Mes avis sont personnels : tu peux ne pas être d'accord, et c'est très bien ainsi.
 
----
+Installe-toi, la lampe est allumée. Et si tu veux me suivre au quotidien, je t'attends sur Instagram : @la.noctambule.
 
-Pour séparer deux parties, trois tirets sur une ligne dessinent un petit ornement. Et voilà : à toi de jouer.
+— La Noctambule
