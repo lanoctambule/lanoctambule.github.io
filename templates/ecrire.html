@@ -29,6 +29,11 @@
   </div>
 
   <form id="writer" hidden>
+    <div id="editBanner" class="editbanner" hidden>
+      <p>Modification de : <strong id="editLabel"></strong></p>
+      <p><button type="button" id="editCancel" class="secondary small-btn">Annuler la modification</button></p>
+    </div>
+
     <fieldset class="formats">
       <legend>Que veux-tu publier ?</legend>
       <label><input type="radio" name="format" value="note" checked> Note rapide <span class="hint">texte court, photo possible</span></label>
@@ -57,6 +62,16 @@
       <input type="text" id="alt" maxlength="200" autocomplete="off">
       <p class="small">La photo est réduite et nettoyée de ses données cachées (lieu, appareil) avant l'envoi.</p>
     </div>
+
+    <div id="currentPhoto" hidden>
+      <img id="currentImg" alt="Photo actuelle de la publication">
+      <label for="altCurrent">Description de la photo actuelle <span class="hint">pour les personnes qui ne la voient pas</span></label>
+      <input type="text" id="altCurrent" maxlength="200" autocomplete="off">
+      <label class="check"><input type="checkbox" id="removePhoto"> Retirer la photo</label>
+      <p class="small">Pour la remplacer, choisis un autre fichier dans « Photo » ci-dessus.</p>
+    </div>
+
+    <label class="check"><input type="checkbox" id="draft"> Garder en brouillon <span class="hint">non visible sur le blog</span></label>
 
     <div class="igbox">
       <p class="igtitle">Pour Instagram</p>
@@ -153,16 +168,18 @@
     return "/repos/" + CFG.repo + "/contents/" + path.split("/").map(encodeURIComponent).join("/");
   }
 
-  function putFile(path, contentB64, message) {
-    var url = contentsUrl(path);
-    return api(url, {
+  function putFile(path, contentB64, message, sha) {
+    var payload = { message: message, content: contentB64, branch: CFG.branch };
+    if (sha) payload.sha = sha;
+    return api(contentsUrl(path), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: message, content: contentB64, branch: CFG.branch })
+      body: JSON.stringify(payload)
     });
   }
 
   function friendly(e) {
+    if (e.status === 409 || e.status === 422) return "Cette publication a changé entre-temps. Clique de nouveau sur « Modifier » pour la recharger.";
     if (e.status === 401) return "La clé d'accès n'est pas valide ou a expiré. Oublie-la puis colles-en une nouvelle.";
     if (e.status === 403 || e.status === 404) return "La clé n'a pas le droit d'écrire sur ce blog. Vérifie qu'elle est limitée au bon dépôt, avec « Contents : Read and write ».";
     return "Échec : " + (e.message || "erreur inconnue") + ".";
@@ -248,6 +265,57 @@
   }
   function jpegFile(bytes) { return new File([bytes], "photo-instagram.jpg", { type: "image/jpeg" }); }
 
+  // ---- Modifier une publication ----
+  var editing = null;   // { name, sha, meta, oldImage } quand on modifie une publication existante
+  var CONTROLLED = { type: 1, title: 1, date: 1, category: 1, summary: 1, image: 1, image_alt: 1, brouillon: 1, draft: 1 };
+
+  function setFormatLocked(locked) {
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="format"]'),
+      function (x) { x.disabled = locked; });
+  }
+
+  function resetForm() {
+    editing = null;
+    setFormatLocked(false);
+    $("editBanner").hidden = true; $("currentPhoto").hidden = true;
+    $("publish").textContent = "Publier";
+    ["text", "title", "summary", "alt", "altCurrent"].forEach(function (id) { $(id).value = ""; });
+    $("photo").value = ""; $("preview").hidden = true; $("removePhoto").checked = false;
+    $("draft").checked = false; $("igPhoto").hidden = true; igFile = null;
+    syncFormat();
+  }
+  function exitEdit() { resetForm(); $("status").textContent = ""; }
+
+  function startEdit(r) {
+    var s = $("manageStatus");
+    s.textContent = "Chargement de la publication…";
+    api(contentsUrl("posts/" + r.name) + ref).then(function (f) {
+      var post = parsePost(b64ToText(f.content)), meta = post.meta;
+      resetForm();
+      editing = { name: r.name, sha: f.sha, meta: meta, oldImage: meta.image || "" };
+      var chronique = !!meta.title;
+      document.querySelector('input[name="format"][value="' + (chronique ? "chronique" : "note") + '"]').checked = true;
+      setFormatLocked(true); syncFormat();
+      if (meta.category && !Array.prototype.some.call($("category").options, function (o) { return o.value === meta.category; })) {
+        var o = document.createElement("option"); o.value = o.textContent = meta.category; $("category").appendChild(o);
+      }
+      $("category").value = meta.category || CFG.categories[0];
+      $("title").value = meta.title || ""; $("summary").value = meta.summary || ""; $("text").value = post.body;
+      var d = (meta.brouillon || meta.draft || "").toLowerCase();
+      $("draft").checked = d === "oui" || d === "true" || d === "1";
+      if (meta.image) {
+        $("currentImg").src = meta.image.charAt(0) === "/" ? window.location.origin + CFG.site + meta.image.slice(1) : meta.image;
+        $("altCurrent").value = meta.image_alt || "";
+        $("currentPhoto").hidden = false;
+      }
+      $("editLabel").textContent = meta.title || snippet(post.body);
+      $("editBanner").hidden = false;
+      $("publish").textContent = "Enregistrer les modifications";
+      $("status").textContent = ""; s.textContent = "";
+      $("writer").scrollIntoView({ behavior: "smooth", block: "start" });
+    }).catch(function (e) { s.textContent = friendly(e); });
+  }
+
   // ---- Mes publications : liste et suppression ----
   var postNames = [], shown = 0, PAGE = 12;
   var ref = "?ref=" + encodeURIComponent(CFG.branch);
@@ -325,7 +393,13 @@
         body: r.post.body, url: postUrl(r.name, !!meta.title)
       }, function (m) { $("manageStatus").textContent = m; });
     });
+    var edit = document.createElement("button");
+    edit.type = "button"; edit.className = "secondary small-btn"; edit.textContent = "Modifier";
+    edit.setAttribute("aria-label", "Modifier : " + label);
+    edit.addEventListener("click", function () { startEdit(r); });
+
     var actions = document.createElement("div"); actions.className = "pactions";
+    actions.appendChild(edit);
     actions.appendChild(ig);
     var imgPath = meta.image && meta.image.charAt(0) === "/" ? "static" + meta.image : "";
     if (imgPath) {
@@ -356,20 +430,24 @@
     });
   }
 
+  // On ne supprime que les photos déposées par cette page (nom daté), jamais un fichier ajouté à la main.
+  function deleteOurImage(img) {
+    if (!/^\/images\/\d{8}-\d{6}\.jpg$/.test(img || "")) return Promise.resolve();
+    var path = "static" + img;
+    return api(contentsUrl(path) + ref).then(function (f) {
+      return deleteFile(path, f.sha, "Suppression d'une photo");
+    }).catch(function () {});
+  }
+
   function removePost(r, label, li, btn) {
     if (!window.confirm("Supprimer définitivement cette publication ?\n\n« " + label + " »")) return;
     var s = $("manageStatus");
     btn.disabled = true; s.textContent = "Suppression…";
     deleteFile("posts/" + r.name, r.sha, "Suppression d'une publication").then(function () {
-      // On ne supprime que les photos déposées par cette page (nom daté), jamais un fichier ajouté à la main.
-      var img = r.post.meta.image || "";
-      if (!/^\/images\/\d{8}-\d{6}\.jpg$/.test(img)) return;
-      var path = "static" + img;
-      return api(contentsUrl(path) + ref).then(function (f) {
-        return deleteFile(path, f.sha, "Suppression d'une photo");
-      }).catch(function () {});
+      return deleteOurImage(r.post.meta.image);
     }).then(function () {
       li.remove();
+      if (editing && editing.name === r.name) exitEdit();
       s.textContent = "Supprimé. Le blog se met à jour dans 1 à 2 minutes.";
     }).catch(function (e) {
       btn.disabled = false; s.textContent = friendly(e);
@@ -433,21 +511,28 @@
     clearToken(); $("status").textContent = ""; show();
   });
 
+  $("editCancel").addEventListener("click", exitEdit);
+
   $("writer").addEventListener("submit", function (ev) {
     ev.preventDefault();
     var status = $("status"), btn = $("publish");
-    var format = document.querySelector('input[name="format"]:checked').value;
+    var isEdit = !!editing;
+    var format = isEdit ? (editing.meta.title ? "chronique" : "note")
+                        : document.querySelector('input[name="format"]:checked').value;
     var isNote = format === "note";
     var text = $("text").value.trim();
     var title = oneLine($("title").value);
     var file = $("photo").files[0];
+    var keepOld = isEdit && !!editing.oldImage && !file && !$("removePhoto").checked;
+    var draft = $("draft").checked;
 
-    if (isNote && !text && !file) { status.textContent = "Écris un texte ou choisis une photo."; return; }
+    if (isNote && !text && !file && !keepOld) { status.textContent = "Écris un texte ou choisis une photo."; return; }
     if (!isNote && (!title || !text)) { status.textContent = "Une chronique a besoin d'un titre et d'un texte."; return; }
 
     var now = parisNow();
     var stamp = now.date.replace(/-/g, "") + "-" + now.time;
-    var postName = now.date + "-" + (isNote ? now.time + "-note" : slugify(title) + "-" + now.time.slice(0, 4)) + ".md";
+    var postName = isEdit ? editing.name
+      : now.date + "-" + (isNote ? now.time + "-note" : slugify(title) + "-" + now.time.slice(0, 4)) + ".md";
     var imgPath = "static/images/" + stamp + ".jpg";
 
     btn.disabled = true; status.textContent = "Envoi en cours…";
@@ -462,23 +547,38 @@
     step.then(function () {
       var fm = ["---", "type: " + format];
       if (!isNote) fm.push("title: " + title);
-      fm.push("date: " + now.date, "category: " + $("category").value);
+      fm.push("date: " + (isEdit && editing.meta.date ? editing.meta.date : now.date), "category: " + $("category").value);
       if (!isNote && $("summary").value.trim()) fm.push("summary: " + oneLine($("summary").value));
       if (file) {
-        fm.push("image: /images/" + stamp + ".jpg");
-        fm.push("image_alt: " + oneLine($("alt").value));
+        fm.push("image: /images/" + stamp + ".jpg", "image_alt: " + oneLine($("alt").value));
+      } else if (keepOld) {
+        fm.push("image: " + editing.oldImage, "image_alt: " + oneLine($("altCurrent").value));
+      }
+      if (draft) fm.push("brouillon: oui");
+      if (isEdit) {   // on conserve les réglages que ce formulaire ne gère pas
+        Object.keys(editing.meta).forEach(function (k) {
+          if (!CONTROLLED[k]) fm.push(k + ": " + editing.meta[k]);
+        });
       }
       fm.push("---", "", text, "");
-      status.textContent = "Publication…";
+      status.textContent = isEdit ? "Enregistrement…" : "Publication…";
       return putFile("posts/" + postName, textToB64(fm.join("\n")),
-        isNote ? "Nouvelle note" : "Nouvelle chronique : " + title);
+        isEdit ? "Modification d'une publication" : (isNote ? "Nouvelle note" : "Nouvelle chronique : " + title),
+        isEdit ? editing.sha : undefined);
+    }).then(function () {
+      // L'ancienne photo n'est plus utilisée si on l'a remplacée ou retirée.
+      if (isEdit && editing.oldImage && !keepOld) return deleteOurImage(editing.oldImage);
     }).then(function () {
       status.innerHTML = "";
-      status.appendChild(document.createTextNode("Publié ! Le blog se met à jour dans 1 à 2 minutes. "));
-      var a = document.createElement("a"); a.href = CFG.site; a.textContent = "Voir le blog";
-      status.appendChild(a);
-      $("text").value = ""; $("title").value = ""; $("summary").value = "";
-      $("photo").value = ""; $("alt").value = ""; $("preview").hidden = true; $("igPhoto").hidden = true; igFile = null;
+      var msg = draft ? "Enregistré en brouillon : il n'apparaît pas sur le blog."
+        : (isEdit ? "Modifications enregistrées ! Le blog se met à jour dans 1 à 2 minutes. "
+                  : "Publié ! Le blog se met à jour dans 1 à 2 minutes. ");
+      status.appendChild(document.createTextNode(msg));
+      if (!draft) {
+        var a = document.createElement("a"); a.href = CFG.site; a.textContent = "Voir le blog";
+        status.appendChild(a);
+      }
+      resetForm();
       loadList();
     }).catch(function (e) {
       status.textContent = friendly(e);

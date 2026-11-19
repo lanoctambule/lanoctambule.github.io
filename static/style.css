@@ -201,3 +201,11 @@ a.affilie::after { content: " (lien affilié)"; font-size: .72em; font-style: it
 .admin .igbox button { margin: 0 .5rem .6rem 0; }
 .admin .pactions { display: flex; flex-direction: column; gap: .4rem; align-items: stretch; flex-shrink: 0; }
 .admin .pactions button { font-size: .82rem; padding: .4rem .8rem; white-space: nowrap; }
+
+/* Page « Écrire » : modification */
+.admin .editbanner { margin-bottom: 1rem; padding: .7rem 1rem; border: 1px solid var(--gold); border-radius: 3px; background: rgba(201, 162, 77, .08); }
+.admin .editbanner p { margin: .2rem 0; }
+.admin #currentPhoto { margin-top: .8rem; }
+.admin #currentPhoto img { max-width: 12rem; max-height: 12rem; border: 1px solid var(--line); border-radius: 2px; display: block; }
+.admin .postlist li { flex-direction: column; align-items: stretch; gap: .6rem; }
+.admin .pactions { flex-direction: row; flex-wrap: wrap; }
