@@ -5,6 +5,7 @@
   "description": "Blog sur les livres, les films, les séries et la musique : ça bouscule, ça hurle, ça chamboule.",
   "pseudo": "La Noctambule",
   "language": "fr",
+  "theme_color": "#16111b",
   "site_url": "",
   "instagram": "la.noctambule",
   "github_repo": "lanoctambule/lanoctambule.github.io",

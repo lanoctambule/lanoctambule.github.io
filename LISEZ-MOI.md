@@ -74,3 +74,10 @@ Le blog est conforme tel quel parce qu'il n'utilise **aucun service tiers**. Pou
 ## Besoin d'aide ?
 
 Reviens vers Claude, avec ton texte d'article ou ta demande de modification, et il fera les changements pour toi.
+
+## Couleurs
+
+Le blog est en **violet et or ancien**, et chaque catégorie a sa couleur : **violet** pour Lecture, **rouge** pour Films & séries, **bleu** pour Musique. Cette couleur apparaît sur la puce de la publication, le bord de sa carte, l'onglet du menu et toute la page de la catégorie.
+
+Pour les changer ou ajouter une catégorie, ouvre `static/style.css` et cherche « Couleurs des catégories » : chaque catégorie y a une ligne `.cat-<nom>` avec ses couleurs. Les palettes ont été vérifiées pour rester lisibles (contraste suffisant du texte) : garde des teintes claires pour `--cat-ink` et `--cat-soft`, et plus foncées pour `--cat`. Si tu préfères, demande-moi de le faire.
+

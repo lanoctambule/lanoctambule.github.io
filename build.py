@@ -229,9 +229,13 @@ def make_site(cfg, posts, pages):
     def absolute(path):
         return cfg["site_url"] + path if cfg["site_url"] else None
 
-    def layout(title, description, body, path, *, home=False, active="", kind="website", noindex=False):
+    cat_slugs = {c["slug"] for c in cfg["categories"]}
+
+    def layout(title, description, body, path, *, home=False, active="", kind="website", noindex=False, cat=""):
         full_title = site_title if home else f"{title} · {site_title}"
         robots_tag = '<meta name="robots" content="noindex, nofollow">' if noindex else ""
+        theme_color = cfg.get("theme_color", "#171210")
+        body_class = f' class="cat-{cat}"' if cat in cat_slugs else ""
         canonical = absolute(path)
         nav_items = [("/", "Accueil", "home")]
         for c in cfg["categories"]:
@@ -242,7 +246,8 @@ def make_site(cfg, posts, pages):
         nav_parts = []
         for href, label, key in nav_items:
             current = ' aria-current="page"' if key == active else ""
-            nav_parts.append(f'<li><a href="{u(href)}"{current}>{esc(label)}</a></li>')
+            cls = f' class="cat-{key}"' if key in cat_slugs else ""
+            nav_parts.append(f'<li><a href="{u(href)}"{cls}{current}>{esc(label)}</a></li>')
         nav = "".join(nav_parts)
         title_tag = (f'<p class="site-title"><a href="{u("/")}">{esc(site_title)}</a></p>'
                      if not home else
@@ -271,7 +276,7 @@ def make_site(cfg, posts, pages):
 <title>{esc(full_title)}</title>
 <meta name="description" content="{esc(description or cfg['description'])}">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#171210">
+<meta name="theme-color" content="{theme_color}">
 {robots_tag}
 <meta property="og:type" content="{kind}">
 <meta property="og:title" content="{esc(full_title)}">
@@ -284,7 +289,7 @@ def make_site(cfg, posts, pages):
 <link rel="stylesheet" href="{u('/style.css')}">
 <script src="{u('/partage.js')}" defer></script>
 </head>
-<body>
+<body{body_class}>
 <a class="skip" href="#contenu">Aller au contenu</a>
 <header class="site-header">
   {title_tag}
@@ -326,13 +331,13 @@ def make_site(cfg, posts, pages):
     def post_card(p):
         c = p["category"]
         link = u("/articles/" + p["slug"] + "/")
-        chip = f'<a class="chip" href="{u("/categorie/" + c["slug"] + "/")}">{esc(c["name"])}</a>'
+        chip = f'<a class="chip cat-{c["slug"]}" href="{u("/categorie/" + c["slug"] + "/")}">{esc(c["name"])}</a>'
         when = (f'<a class="when" href="{link}"><time datetime="{p["date"].isoformat()}">'
                 f'{fr_date(p["date"])}</time></a>')
         if p["is_note"]:
             text = render_markdown(p["body_md"], base, line_breaks=True)
             body = f'<div class="note-text">{text}</div>' if p["body_md"] else ""
-            return f"""<article class="card note">
+            return f"""<article class="card note cat-{c['slug']}">
   {figure(p)}
   <div class="card-body">
     <p class="meta">{chip} {when}</p>
@@ -341,7 +346,7 @@ def make_site(cfg, posts, pages):
   </div>
 </article>"""
         summary = f'<p class="summary">{esc(p["summary"])}</p>' if p["summary"] else ""
-        return f"""<article class="card chronique">
+        return f"""<article class="card chronique cat-{c['slug']}">
   {figure(p)}
   <div class="card-body">
     <p class="meta">{chip} {when} <span>{p['minutes']} min de lecture</span></p>
@@ -393,7 +398,7 @@ def make_site(cfg, posts, pages):
                    else f'<h1>{esc(p["title"])}</h1>')
         body = f"""<article class="post{' post-note' if p['is_note'] else ''}">
   <header class="post-head">
-    <p class="meta"><a class="chip" href="{u('/categorie/' + c['slug'] + '/')}">{esc(c['name'])}</a>
+    <p class="meta"><a class="chip cat-{c['slug']}" href="{u('/categorie/' + c['slug'] + '/')}">{esc(c['name'])}</a>
     <time datetime="{p['date'].isoformat()}">{fr_date(p['date'])}</time>{reading}</p>
     {heading}
   </header>
@@ -405,7 +410,7 @@ def make_site(cfg, posts, pages):
 </article>
 {pager}"""
         path = f"/articles/{p['slug']}/"
-        outputs[path] = layout(p["display_title"], p["summary"], body, path, active=c["slug"], kind="article")
+        outputs[path] = layout(p["display_title"], p["summary"], body, path, active=c["slug"], kind="article", cat=c["slug"])
 
     # Catégories
     for c in cfg["categories"]:
@@ -420,7 +425,7 @@ def make_site(cfg, posts, pages):
 {cards}
 </section>"""
         path = f"/categorie/{c['slug']}/"
-        outputs[path] = layout(c["name"], c.get("description", ""), body, path, active=c["slug"])
+        outputs[path] = layout(c["name"], c.get("description", ""), body, path, active=c["slug"], cat=c["slug"])
 
     # Pages (à propos, mentions légales, confidentialité…)
     for pg in pages:
@@ -444,6 +449,7 @@ def admin_page(cfg, layout):
         "branch": cfg.get("github_branch", "main"),
         "categories": [c["name"] for c in cfg["categories"]],
         "blog": cfg["title"],
+        "bg": cfg.get("theme_color", "#171210"),
         "site": cfg["base"] + "/",
     }, ensure_ascii=False).replace("</", "<\\/")
     body = tpl.replace("__CONFIG__", conf)

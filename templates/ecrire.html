@@ -192,7 +192,7 @@
       var w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
       var c = document.createElement("canvas"); c.width = w; c.height = h;
       var ctx = c.getContext("2d");
-      ctx.fillStyle = "#171210"; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = CFG.bg || "#171210"; ctx.fillRect(0, 0, w, h);
       ctx.drawImage(bmp, 0, 0, w, h);
       return new Promise(function (res, rej) {
         c.toBlob(function (b) { b ? res(b) : rej(new Error("photo illisible")); }, "image/jpeg", 0.82);
