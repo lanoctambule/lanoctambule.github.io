@@ -62,6 +62,13 @@
     <p id="status" class="status" role="status" aria-live="polite"></p>
     <p class="small"><button type="button" id="forget" class="link">Oublier la clé sur cet appareil</button></p>
   </form>
+
+  <div id="manage" hidden>
+    <h2 class="section-title">Mes publications</h2>
+    <ul id="postList" class="postlist"></ul>
+    <p id="manageStatus" class="status" role="status" aria-live="polite"></p>
+    <p><button type="button" id="moreBtn" class="secondary" hidden>Voir plus ancien</button></p>
+  </div>
 </section>
 
 <script>
@@ -89,6 +96,8 @@
     var ok = !!getToken();
     $("setup").hidden = ok;
     $("writer").hidden = !ok;
+    $("manage").hidden = !ok;
+    if (ok) loadList(); else $("postList").innerHTML = "";
   }
 
   // ---- Outils ----
@@ -122,6 +131,7 @@
       "Authorization": "Bearer " + getToken(),
       "Accept": "application/vnd.github+json"
     }, options.headers || {});
+    options.cache = "no-store";
     return fetch("https://api.github.com" + path, options).then(function (r) {
       if (r.ok) return r.json();
       return r.json().catch(function () { return {}; }).then(function (j) {
@@ -130,8 +140,12 @@
     });
   }
 
+  function contentsUrl(path) {
+    return "/repos/" + CFG.repo + "/contents/" + path.split("/").map(encodeURIComponent).join("/");
+  }
+
   function putFile(path, contentB64, message) {
-    var url = "/repos/" + CFG.repo + "/contents/" + path.split("/").map(encodeURIComponent).join("/");
+    var url = contentsUrl(path);
     return api(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -160,6 +174,107 @@
     }).then(function (blob) { return blob.arrayBuffer(); })
       .then(function (buf) { return new Uint8Array(buf); });
   }
+
+  // ---- Mes publications : liste et suppression ----
+  var postNames = [], shown = 0, PAGE = 12;
+  var ref = "?ref=" + encodeURIComponent(CFG.branch);
+
+  function b64ToText(b64) {
+    var bin = atob(b64.replace(/\s/g, "")), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function parsePost(text) {
+    var m = text.replace(/^﻿/, "").match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+    var meta = {}, body = text;
+    if (m) {
+      m[1].split("\n").forEach(function (l) {
+        var i = l.indexOf(":");
+        if (i > 0) meta[l.slice(0, i).trim().toLowerCase()] = l.slice(i + 1).trim();
+      });
+      body = m[2];
+    }
+    return { meta: meta, body: body.trim() };
+  }
+  function snippet(s) {
+    s = s.replace(/[#*_>`\[\]!]/g, "").replace(/\s+/g, " ").trim();
+    return s.length > 70 ? s.slice(0, 70).replace(/\s\S*$/, "") + "…" : (s || "(photo seule)");
+  }
+
+  function loadList() {
+    var s = $("manageStatus");
+    s.textContent = "Chargement…";
+    return api(contentsUrl("posts") + ref).then(function (items) {
+      postNames = items.filter(function (f) {
+        return f.type === "file" && /\.md$/.test(f.name) && f.name.charAt(0) !== "_";
+      }).map(function (f) { return f.name; }).sort().reverse();
+      shown = 0; $("postList").innerHTML = "";
+      return showMore();
+    }).catch(function (e) { s.textContent = friendly(e); });
+  }
+
+  function showMore() {
+    var batch = postNames.slice(shown, shown + PAGE);
+    shown += batch.length;
+    return Promise.all(batch.map(function (name) {
+      return api(contentsUrl("posts/" + name) + ref).then(function (f) {
+        return { name: name, sha: f.sha, post: parsePost(b64ToText(f.content)) };
+      }).catch(function () { return null; });
+    })).then(function (rows) {
+      rows.forEach(function (r) { if (r) addRow(r); });
+      $("moreBtn").hidden = shown >= postNames.length;
+      $("manageStatus").textContent = postNames.length ? "" : "Aucune publication pour le moment.";
+    });
+  }
+
+  function addRow(r) {
+    var meta = r.post.meta;
+    var label = meta.title || snippet(r.post.body);
+    var li = document.createElement("li");
+    var info = document.createElement("div"); info.className = "pinfo";
+    var m = document.createElement("span"); m.className = "pmeta";
+    m.textContent = (meta.title ? "Chronique" : "Note") + " · " + (meta.date || "") +
+      (meta.category ? " · " + meta.category : "") + (meta.image ? " · avec photo" : "") +
+      ((meta.brouillon || "").toLowerCase() === "oui" ? " · brouillon" : "");
+    var t = document.createElement("span"); t.className = "ptitle"; t.textContent = label;
+    info.appendChild(m); info.appendChild(t);
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "danger"; btn.textContent = "Supprimer";
+    btn.setAttribute("aria-label", "Supprimer : " + label);
+    btn.addEventListener("click", function () { removePost(r, label, li, btn); });
+    li.appendChild(info); li.appendChild(btn);
+    $("postList").appendChild(li);
+  }
+
+  function deleteFile(path, sha, message) {
+    return api(contentsUrl(path), {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: message, sha: sha, branch: CFG.branch })
+    });
+  }
+
+  function removePost(r, label, li, btn) {
+    if (!window.confirm("Supprimer définitivement cette publication ?\n\n« " + label + " »")) return;
+    var s = $("manageStatus");
+    btn.disabled = true; s.textContent = "Suppression…";
+    deleteFile("posts/" + r.name, r.sha, "Suppression d'une publication").then(function () {
+      // On ne supprime que les photos déposées par cette page (nom daté), jamais un fichier ajouté à la main.
+      var img = r.post.meta.image || "";
+      if (!/^\/images\/\d{8}-\d{6}\.jpg$/.test(img)) return;
+      var path = "static" + img;
+      return api(contentsUrl(path) + ref).then(function (f) {
+        return deleteFile(path, f.sha, "Suppression d'une photo");
+      }).catch(function () {});
+    }).then(function () {
+      li.remove();
+      s.textContent = "Supprimé. Le blog se met à jour dans 1 à 2 minutes.";
+    }).catch(function (e) {
+      btn.disabled = false; s.textContent = friendly(e);
+    });
+  }
+
+  $("moreBtn").addEventListener("click", showMore);
 
   // ---- Interface ----
   CFG.categories.forEach(function (name) {
@@ -245,6 +360,7 @@
       status.appendChild(a);
       $("text").value = ""; $("title").value = ""; $("summary").value = "";
       $("photo").value = ""; $("alt").value = ""; $("preview").hidden = true;
+      loadList();
     }).catch(function (e) {
       status.textContent = friendly(e);
     }).then(function () { btn.disabled = false; });
