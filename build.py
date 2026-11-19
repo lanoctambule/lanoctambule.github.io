@@ -443,6 +443,7 @@ def admin_page(cfg, layout):
         "repo": cfg.get("github_repo", ""),
         "branch": cfg.get("github_branch", "main"),
         "categories": [c["name"] for c in cfg["categories"]],
+        "blog": cfg["title"],
         "site": cfg["base"] + "/",
     }, ensure_ascii=False).replace("</", "<\\/")
     body = tpl.replace("__CONFIG__", conf)

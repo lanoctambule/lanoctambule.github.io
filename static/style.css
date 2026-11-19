@@ -194,3 +194,10 @@ a.affilie::after { content: " (lien affilié)"; font-size: .72em; font-style: it
 .actions .react:hover { color: var(--gold-soft); }
 .share-status { color: var(--gold); font-style: italic; font-size: .85rem; }
 .post > .actions { margin-top: 2rem; justify-content: center; }
+
+/* Page « Écrire » : Instagram */
+.admin .igbox { margin-top: 1.4rem; padding: .8rem 1rem 0; border: 1px dashed var(--line); border-radius: 3px; }
+.admin .igtitle { margin: 0 0 .2rem; color: var(--gold); font-size: .8rem; letter-spacing: .2em; text-transform: uppercase; }
+.admin .igbox button { margin: 0 .5rem .6rem 0; }
+.admin .pactions { display: flex; flex-direction: column; gap: .4rem; align-items: stretch; flex-shrink: 0; }
+.admin .pactions button { font-size: .82rem; padding: .4rem .8rem; white-space: nowrap; }

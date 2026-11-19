@@ -41,6 +41,8 @@ Ton blog est un **fil** : tu peux y poster des **notes rapides** (texte court, p
 
 La photo est automatiquement réduite et débarrassée de ses données cachées (lieu, modèle d'appareil).
 
+**Publier aussi sur Instagram** : sur la page « Écrire », le bouton **Copier pour Instagram** copie ton texte déjà nettoyé (sans les symboles de mise en forme) : colle-le dans la légende. Pour une chronique, il copie le titre, le résumé et le lien vers le blog. Le bouton **Photo pour Instagram** ouvre le menu de partage du téléphone (choisis Instagram) ou enregistre la photo sur l'appareil. Ces boutons existent dans le formulaire (avant de publier) et dans « Mes publications » (pour une publication déjà en ligne). Ils ne publient rien sur Instagram à ta place.
+
 **Supprimer une publication** : en bas de la page « Écrire », la liste « Mes publications » montre tes dernières publications (les plus récentes d'abord). Clique sur **Supprimer** et confirme : la publication disparaît du blog en 1 à 2 minutes, avec sa photo si elle a été ajoutée par cette page. Pour la masquer sans la supprimer, ajoute `brouillon: oui` à la main dans son fichier.
 
 **Méthode manuelle (toujours possible)** : sur GitHub, ouvre le dossier `posts`, puis **Add file → Create new file**, nomme-le `2026-12-01-mon-article.md` et copie le contenu de `_modele.md`. Pour une note rapide, utilise `type: note` et supprime la ligne `title:` (voir `posts/2026-11-19-exemple-note.md`).

@@ -58,6 +58,15 @@
       <p class="small">La photo est réduite et nettoyée de ses données cachées (lieu, appareil) avant l'envoi.</p>
     </div>
 
+    <div class="igbox">
+      <p class="igtitle">Pour Instagram</p>
+      <p class="small">Prépare ton texte et ta photo à coller dans l'appli Instagram. Rien n'est publié par ce bouton.</p>
+      <p>
+        <button type="button" id="igCopy" class="secondary">Copier pour Instagram</button>
+        <button type="button" id="igPhoto" class="secondary" hidden>Photo pour Instagram</button>
+      </p>
+    </div>
+
     <p><button type="submit" id="publish">Publier</button></p>
     <p id="status" class="status" role="status" aria-live="polite"></p>
     <p class="small"><button type="button" id="forget" class="link">Oublier la clé sur cet appareil</button></p>
@@ -175,6 +184,70 @@
       .then(function (buf) { return new Uint8Array(buf); });
   }
 
+  // ---- Pour Instagram : légende à copier + photo ----
+  function pySlug(s) {   // même règle que le générateur du blog
+    return s.normalize("NFKD").replace(/[^\x00-\x7f]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "sans-titre";
+  }
+  function postUrl(name, hasTitle) {
+    var stem = name.replace(/\.md$/, "");
+    if (hasTitle) stem = stem.replace(/^\d{4}-\d{2}-\d{2}-?/, "") || stem;
+    return window.location.origin + CFG.site + "articles/" + pySlug(stem) + "/";
+  }
+  function plainText(md) {
+    return md.replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+      .replace(/^#{1,6}\s*/gm, "").replace(/^>\s?/gm, "")
+      .replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1")
+      .replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function igCaption(o) {
+    var parts = [];
+    if (o.isNote) {
+      parts.push(plainText(o.body));
+    } else {
+      parts.push(o.title);
+      var blocks = o.body.split(/\n\s*\n/).filter(function (b) { return b.trim() && !/^#/.test(b.trim()); });
+      var teaser = o.summary || plainText(blocks[0] || "").slice(0, 350);
+      parts.push(teaser);
+      parts.push("Chronique complète sur " + CFG.blog + " : " + o.url);
+    }
+    var out = parts.filter(Boolean).join("\n\n");
+    return out.length > 2200 ? out.slice(0, 2190).replace(/\s\S*$/, "") + "…" : out;
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (res, rej) {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      ta.remove(); ok ? res() : rej(new Error("copie impossible"));
+    });
+  }
+  function downloadFile(file) {
+    var u = URL.createObjectURL(file), a = document.createElement("a");
+    a.href = u; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 10000);
+  }
+  function sendPhoto(file, say) {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      return navigator.share({ files: [file] }).catch(function (e) {
+        if (e && e.name === "AbortError") return;
+        downloadFile(file); say("Photo enregistrée sur cet appareil : ajoute-la depuis ta galerie.");
+      });
+    }
+    downloadFile(file); say("Photo enregistrée sur cet appareil : ajoute-la depuis ta galerie.");
+    return Promise.resolve();
+  }
+  function copyForInstagram(o, say) {
+    return copyText(igCaption(o)).then(
+      function () { say("Texte copié : colle-le dans la légende sur Instagram."); },
+      function () { say("Impossible de copier automatiquement. Sélectionne le texte à la main."); }
+    );
+  }
+  function jpegFile(bytes) { return new File([bytes], "photo-instagram.jpg", { type: "image/jpeg" }); }
+
   // ---- Mes publications : liste et suppression ----
   var postNames = [], shown = 0, PAGE = 12;
   var ref = "?ref=" + encodeURIComponent(CFG.branch);
@@ -242,7 +315,36 @@
     btn.type = "button"; btn.className = "danger"; btn.textContent = "Supprimer";
     btn.setAttribute("aria-label", "Supprimer : " + label);
     btn.addEventListener("click", function () { removePost(r, label, li, btn); });
-    li.appendChild(info); li.appendChild(btn);
+
+    var ig = document.createElement("button");
+    ig.type = "button"; ig.className = "secondary small-btn"; ig.textContent = "Copier pour Instagram";
+    ig.setAttribute("aria-label", "Copier pour Instagram : " + label);
+    ig.addEventListener("click", function () {
+      copyForInstagram({
+        isNote: !meta.title, title: meta.title || "", summary: meta.summary || "",
+        body: r.post.body, url: postUrl(r.name, !!meta.title)
+      }, function (m) { $("manageStatus").textContent = m; });
+    });
+    var actions = document.createElement("div"); actions.className = "pactions";
+    actions.appendChild(ig);
+    var imgPath = meta.image && meta.image.charAt(0) === "/" ? "static" + meta.image : "";
+    if (imgPath) {
+      var ph = document.createElement("button");
+      ph.type = "button"; ph.className = "secondary small-btn"; ph.textContent = "Photo pour Instagram";
+      ph.setAttribute("aria-label", "Photo pour Instagram : " + label);
+      ph.addEventListener("click", function () {
+        var s = $("manageStatus"); s.textContent = "Préparation de la photo…";
+        api(contentsUrl(imgPath) + ref).then(function (f) {
+          var bin = atob(f.content.replace(/\s/g, "")), bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          s.textContent = "";
+          return sendPhoto(jpegFile(bytes), function (m) { s.textContent = m; });
+        }).catch(function (e) { s.textContent = friendly(e); });
+      });
+      actions.appendChild(ph);
+    }
+    actions.appendChild(btn);
+    li.appendChild(info); li.appendChild(actions);
     $("postList").appendChild(li);
   }
 
@@ -289,12 +391,29 @@
   Array.prototype.forEach.call(document.querySelectorAll('input[name="format"]'),
     function (r) { r.addEventListener("change", syncFormat); });
 
-  var previewUrl = "";
+  var previewUrl = "", igFile = null;
   $("photo").addEventListener("change", function () {
     if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ""; }
     var f = $("photo").files[0];
-    $("preview").hidden = !f;
-    if (f) { previewUrl = URL.createObjectURL(f); $("previewImg").src = previewUrl; }
+    $("preview").hidden = !f; $("igPhoto").hidden = true; igFile = null;
+    if (f) {
+      previewUrl = URL.createObjectURL(f); $("previewImg").src = previewUrl;
+      prepareImage(f).then(function (bytes) { igFile = jpegFile(bytes); $("igPhoto").hidden = false; })
+        .catch(function () {});
+    }
+  });
+
+  $("igCopy").addEventListener("click", function () {
+    var isNote = document.querySelector('input[name="format"]:checked').value === "note";
+    var text = $("text").value.trim(), title = oneLine($("title").value);
+    if (!text && !(title && !isNote)) { $("status").textContent = "Écris d'abord ton texte."; return; }
+    copyForInstagram({
+      isNote: isNote, title: title, summary: oneLine($("summary").value), body: text,
+      url: window.location.origin + CFG.site
+    }, function (m) { $("status").textContent = m; });
+  });
+  $("igPhoto").addEventListener("click", function () {
+    if (igFile) sendPhoto(igFile, function (m) { $("status").textContent = m; });
   });
 
   $("saveToken").addEventListener("click", function () {
@@ -359,7 +478,7 @@
       var a = document.createElement("a"); a.href = CFG.site; a.textContent = "Voir le blog";
       status.appendChild(a);
       $("text").value = ""; $("title").value = ""; $("summary").value = "";
-      $("photo").value = ""; $("alt").value = ""; $("preview").hidden = true;
+      $("photo").value = ""; $("alt").value = ""; $("preview").hidden = true; $("igPhoto").hidden = true; igFile = null;
       loadList();
     }).catch(function (e) {
       status.textContent = friendly(e);
